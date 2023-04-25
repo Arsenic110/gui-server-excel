@@ -4,7 +4,7 @@ const config = require("./config.json");
 
 
 const server = http.createServer(requestListener);
-const __rootname = __dirname.split("\\").slice(0, -1).join("\\");
+const __rootname = __dirname.split("\\").slice(0, -1).join("\\"); //lol
 
 const io = require("socket.io")(server);
 
@@ -22,7 +22,21 @@ function init()
     io.on('connection', (socket) => {
         console.log("Connection established with " + socket.id);
 
-        socket.on("hello", () => console.log(`Completed handshake with ${socket.id}`));
+        socket.on("client-handshake", () => 
+        {
+            console.log(`Completed handshake with ${socket.id}`); 
+            socket.emit("server-response", "placeholder report");
+        });
+
+        socket.on("test-op", () => 
+        {
+            socket.emit("job-done", "placeholder reply to [test-op]");
+        });
+
+        socket.on("test-op-2", () => 
+        {
+            socket.emit("job-done", "placeholder reply to [test-op-2]");
+        });
     })
 }
 

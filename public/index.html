@@ -9,8 +9,22 @@
 </head>
 <body>
 
-    <h1>GUI Server Control</h1>
+    
+    <h1 style="padding-left: 2rem; margin-bottom: 0px;">GUI Server Control</h1>
+    <div class="flex-container">
+        
+        <div class="flex-item panel">
+            <h4>Execute operations:</h4>
 
+            <div id="operations">
+                <button id="test-op">Test Op</button>
+                <button id="test-op-2">Test Op 2</button>
+            </div>
+        </div>
+        <div class="flex-item console-window">
+            <p class="console" id="console-p"></p>
+        </div>
+    </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script type="text/javascript" src="app.js"></script>
