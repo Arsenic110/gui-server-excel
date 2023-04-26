@@ -19,6 +19,8 @@ function init()
 
     socket.on("job-done", (res) => {writeReply(`Server ${writeColor("completed", "#00FF00")} task ${res}`)});
 
+    socket.on("broadcast", (br) => {writeReply(br)});
+
     Array.from(opsDiv.children).forEach((child) => 
     {
         if(child.tagName.toLowerCase() != "button")
