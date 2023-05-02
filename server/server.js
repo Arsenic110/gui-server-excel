@@ -1,6 +1,7 @@
 const http = require("http");
 const fs = require("fs").promises;
-const config = require("./config.json");
+let config;
+config = reloadJSON("server/config.json");
 
 const Excel = require("exceljs");
 
@@ -52,6 +53,7 @@ function init()
 
     //fs.mkdir("OPERATIONS/").then(initFilestructure).catch(() => console.log("OPERATIONS/ already exists, skipping initFilestructure()"));
     initFilestructure();
+    //SEMSExport();
 }
 
 
@@ -92,19 +94,20 @@ async function SEMSExport()
 {
     //here, we will be combining multiple workbooks together into one new one. 
     const outputWB = new Excel.Workbook(); //create a blank WB we will be using as output.
+    outputWB.addWorksheet("DATA");
     outputWB.addWorksheet("SEMS");
+
+    reloadJSON();
+
     //collect the names of all workbooks that do not contain "SEMS" in the filename.
 
     var fileListRaw = await fs.readdir("OPERATIONS/SEMS Export/"), fileList = [];
     
-
     for(let i = 0; i < fileListRaw.length; i++)
     {
         if(!fileListRaw[i].toLowerCase().includes("sems"))
             fileList.push("OPERATIONS/SEMS Export/" + fileListRaw[i]);
     }
-
-    //console.log(fileList.join(" "));
 
     var wbList = [], userCol, ageCol;
 
@@ -141,34 +144,73 @@ async function SEMSExport()
 
     var totalCount = 0, unassignedCount = 0, oldestAge = 0;
     
+    //1 for header, and 1 for zero based indexing.
     totalCount = outputWB.getWorksheet("SEMS").getColumn(userCol).values.length - 2;
+
+    //for each unassigned cell
     outputWB.getWorksheet("SEMS").getColumn(userCol).eachCell((cell, no) => {if (cell.value == "")
     { 
         unassignedCount++; 
 
         var ageCell = outputWB.getWorksheet("SEMS").getColumn(ageCol).values[no];
-        console.log(ageCell);
 
         var cVal = Number(ageCell.replace(":", "").replace(":", ""));
         oldestAge = Math.max(cVal, oldestAge);
         
     }});
-    outputWB.getWorksheet("SEMS").getColumn(ageCol).eachCell((cell, no) => 
+
+    //copy the header
+    outputWB.getWorksheet("DATA").addRow(outputWB.getWorksheet("SEMS").getRow(1).values);
+
+    //clone the unassigned records to the DATA sheet
+    outputWB.getWorksheet("SEMS").getColumn(userCol).eachCell((cell, no) => 
     {
-
-
+        if(cell.value == "")
+        {
+            outputWB.getWorksheet("DATA").addRow(outputWB.getWorksheet("SEMS").getRow(no).values);
+        }
     });
 
-    console.log(`Total: ${totalCount}, Unassigned: ${unassignedCount}, Age: ${oldestAge}`);
+    //we will need to assign names from the list
+    let rr = [" "];
+    for(let i = 2; i <= outputWB.getWorksheet("DATA").lastRow._number; i++)
+    {//uhh this should iterate through the rows here??
+        rr.push(config.SEMSExport.names[(i - 2) % config.SEMSExport.names.length]);
+        outputWB.getWorksheet("DATA").getColumn(userCol).values = rr;
+    }
 
-    await outputWB.xlsx.writeFile("OPERATIONS/SEMS Export/SEMS.xlsx");
+    //copy the header again cuz why not?(kidding, this fixes the header.)
+    outputWB.getWorksheet("DATA").getRow(1).values = outputWB.getWorksheet("SEMS").getRow(1).values;
+
+    let oldestAgeString = "";
+
+    let minutes = oldestAge % 100;
+    let hours = oldestAge % 10000 - minutes == 0 ? "00" : oldestAge % 10000 - minutes;
+    let days = oldestAge - hours - minutes == 0 ? "00" : oldestAge - hours - minutes;
+
+    oldestAgeString = `${days}:${hours}:${minutes}`;
+
+    console.log(`Total: ${totalCount}, Unassigned: ${unassignedCount}, Age: ${oldestAgeString}`);
+
+    let today = new Date();
+
+    await outputWB.xlsx.writeFile(`OPERATIONS/SEMS Export/SEMS ${`${today.getDate()}`.padStart(2, "0")}.${`${today.getMonth() + 1}`.padStart(2, "0")}.xlsx`);
 
     try
     {
-        _socket.emit("broadcast", `SEMS Export complete. Total: ${totalCount}, Unassigned: ${unassignedCount}, Oldest Unassigned Age: ${oldestAge}`);
+        _socket.emit("broadcast", `Good morning! Total SEMS: ${totalCount}, Unassigned: ${unassignedCount}, Oldest Unassigned Age: ${oldestAgeString}`);
     }
     catch (err)
     {
         console.log("Failed Broadcast");
     }
+}
+
+function reloadJSON(path)
+{
+    path = path == undefined ? "server/config.json" : path;
+
+    let temp = JSON.parse(require("fs").readFileSync(path, 'utf8'));
+    config = temp;
+    return temp;
 }

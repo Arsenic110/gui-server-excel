@@ -1,4 +1,9 @@
 {
     "hostname": "localhost",
-    "port": 5432
+    "port": 5432,
+
+    "SEMSExport": 
+    {
+        "names": ["Anna", "Michael", "Kuba"]
+    }
 }
