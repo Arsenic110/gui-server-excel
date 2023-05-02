@@ -46,7 +46,6 @@ function init()
 
         socket.on("SEMS-export", () =>
         {
-            socket.emit("broadcast", "Starting export...");
             SEMSExport();
         });
     });
@@ -71,6 +70,15 @@ function requestListener(req, res)
 
         res.end(contents);
     }).catch((e) => {console.warn(e); res.end("500")});
+}
+
+function reloadJSON(path)
+{
+    path = path == undefined ? "server/config.json" : path;
+
+    let temp = JSON.parse(require("fs").readFileSync(path, 'utf8'));
+    config = temp;
+    return temp;
 }
 
 function translateURI(url)
@@ -109,7 +117,7 @@ async function SEMSExport()
             fileList.push("OPERATIONS/SEMS Export/" + fileListRaw[i]);
     }
 
-    if(fileList == [])
+    if(fileList.length == 0)
     {
         try
         {
@@ -121,6 +129,8 @@ async function SEMSExport()
         }
         return;
     }
+
+    socket.emit("broadcast", "Starting export...");
 
     var wbList = [], userCol, ageCol;
 
@@ -219,11 +229,3 @@ async function SEMSExport()
     }
 }
 
-function reloadJSON(path)
-{
-    path = path == undefined ? "server/config.json" : path;
-
-    let temp = JSON.parse(require("fs").readFileSync(path, 'utf8'));
-    config = temp;
-    return temp;
-}
