@@ -109,6 +109,19 @@ async function SEMSExport()
             fileList.push("OPERATIONS/SEMS Export/" + fileListRaw[i]);
     }
 
+    if(fileList == [])
+    {
+        try
+        {
+            _socket.emit("broadcast", `There are no valid files to operate on.`);
+        }
+        catch (err)
+        {
+            console.log("Failed Broadcast");
+        }
+        return;
+    }
+
     var wbList = [], userCol, ageCol;
 
     for(let i = 0; i < fileList.length; i++)
