@@ -4,6 +4,9 @@ let config;
 config = reloadJSON("server/config.json");
 
 const Excel = require("exceljs");
+const { Console } = require("console");
+const { env } = require("process");
+const { Condition } = require("selenium-webdriver");
 
 
 const server = http.createServer(requestListener);
@@ -17,10 +20,10 @@ init();
 
 function init()
 {
-    server.listen(config.port, config.hostname, () => 
+    //server.listen(config.port, config.hostname, () => 
     {
         console.log(`Server is listening for http traffic on http://${config.hostname}:${config.port}/`);
-    });
+    }//);
 
     //create mappings for socket.io
 
@@ -34,25 +37,23 @@ function init()
             socket.emit("server-response", "placeholder report");
         });
 
-        socket.on("test-op", () => 
-        {
-            socket.emit("job-done", "placeholder reply to [test-op]");
-        });
-
-        socket.on("test-op-2", () => 
-        {
-            socket.emit("job-done", "placeholder reply to [test-op-2]");
-        });
-
         socket.on("SEMS-export", () =>
         {
             SEMSExport();
         });
+
+        socket.on("Claims-data", () =>
+        {
+            ClaimsData();
+        });
+
     });
 
     //fs.mkdir("OPERATIONS/").then(initFilestructure).catch(() => console.log("OPERATIONS/ already exists, skipping initFilestructure()"));
     initFilestructure();
-    //SEMSExport();
+
+    //Put a method here to test it on boot - 
+    ClaimsData();
 }
 
 
@@ -98,6 +99,24 @@ function initFilestructure()
     folderList.forEach((child) => { fs.mkdir(`OPERATIONS/${child}/`).catch(()=>{}) });
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 async function SEMSExport()
 {
     //here, we will be combining multiple workbooks together into one new one. 
@@ -130,7 +149,15 @@ async function SEMSExport()
         return;
     }
 
-    socket.emit("broadcast", "Starting export...");
+    try
+    {
+        _socket.emit("broadcast", "Starting export...");
+    }
+    catch (err)
+    {
+        console.log("Failed Broadcast");
+    }
+
 
     var wbList = [], userCol, ageCol;
 
@@ -207,16 +234,23 @@ async function SEMSExport()
 
     let oldestAgeString = "";
 
+
+    //this will 'fix' date formatting such that the output is actually human readable.
     let minutes = oldestAge % 100;
     let hours = oldestAge % 10000 - minutes == 0 ? "00" : oldestAge % 10000 - minutes;
     let days = oldestAge - hours - minutes == 0 ? "00" : oldestAge - hours - minutes;
 
+    hours = hours == "00" ? "00" : hours / 100; 
+    days = days == "00" ? "00" : days / 10000;
+
     oldestAgeString = `${days}:${hours}:${minutes}`;
 
+    //debug log
     console.log(`Total: ${totalCount}, Unassigned: ${unassignedCount}, Age: ${oldestAgeString}`);
 
     let today = new Date();
 
+    //write the file!
     await outputWB.xlsx.writeFile(`OPERATIONS/SEMS Export/SEMS ${`${today.getDate()}`.padStart(2, "0")}.${`${today.getMonth() + 1}`.padStart(2, "0")}.xlsx`);
 
     try
@@ -229,3 +263,145 @@ async function SEMSExport()
     }
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+async function ClaimsData()
+{
+    //create a new workbook
+    const outputWB = new Excel.Workbook();
+    outputWB.addWorksheet("Sheet1");
+
+    reloadJSON();
+
+    var fileListRaw = await fs.readdir("OPERATIONS/Claim Data/"), fileList = [];
+    
+    for(let i = 0; i < fileListRaw.length; i++)
+    {
+        if(fileListRaw[i].toLowerCase().includes("claims") && fileListRaw[i].toLowerCase().includes("internal"))
+            fileList.push("OPERATIONS/Claim Data/" + fileListRaw[i]);
+    }
+
+    if(fileList.length == 0)
+    {
+        Broadcast("There are no valid files to operate on.");
+        return;
+    }
+    else if(fileList.length != 1)
+    {
+        Broadcast("Too many files detected. Please clear input!");
+        return;
+    }
+
+    Broadcast("Starting export...");
+
+    var claimsInputFilePath = fileList[0];
+
+    const claimsInputFile = new Excel.Workbook();
+    await claimsInputFile.xlsx.readFile(claimsInputFilePath);
+
+    //at this point, we can assume the entire claims file has been loaded into memory
+    //Step 1.1: find the correct sheet
+
+    let validClaimsSheet = null;
+
+    claimsInputFile.worksheets.forEach((sheet) => 
+    { 
+        if(sheet.name.toLowerCase().includes("valid claims") && sheet.name.toLowerCase().includes(config.ClaimsData.currentQuarter.toLowerCase()))
+        {
+            validClaimsSheet = sheet;
+        }
+    });
+    if(!validClaimsSheet)
+    {
+        Broadcast("The correct sheet could not be found.");
+        return;
+    }
+
+    console.log("Found sheet: " + validClaimsSheet.name);
+
+    //Step 1.2: Read all the green rows
+    //so green in this case can also be any order where the column AU or AV has not been filled in.
+
+    var claimLetterDateCol = validClaimsSheet.getColumn('AU');
+    var rowsToClaim = [];
+
+    claimLetterDateCol.eachCell({includeEmpty: true}, (cell, rowNumber) => 
+    {
+        if(!cell.value)
+        {
+            rowsToClaim.push(validClaimsSheet.getRow(rowNumber));
+        }
+
+    });
+
+    //last part is that we need to actually copy the headings on the template sheet.
+    let templateSheet = new Excel.Workbook();
+    await templateSheet.xlsx.readFile("OPERATIONS/Claim Data/template/claim letter data template.xlsx");
+
+    templateSheet = templateSheet.worksheets[0]; //what do you want from me?
+
+    templateSheet.eachRow({includeEmpty: true}, (row, i) => 
+    {
+        if(i == 1)
+            rowsToClaim.unshift(row);
+    });
+
+
+    //Step 1.3: Copy them to new Excel sheet
+    const outputSheet = outputWB.getWorksheet("Sheet1");
+
+    
+
+    for(let i = 1; i <= rowsToClaim.length; i++)
+    {
+        let row = outputSheet.getRow(i);
+        row.values = rowsToClaim[i-1].values;
+        row.height = rowsToClaim[i-1].height + 5;
+
+        row.eachCell((cel, col) => { cel.style = rowsToClaim[i-1].getCell(col).style; });
+
+        row.commit();
+    }
+
+    outputSheet.eachRow({includeEmpty: true}, (row, i) =>
+    {
+        row.values = rowsToClaim[i-1].values;
+        row.height = rowsToClaim[i-1].height + 5;
+
+        row.eachCell({includeEmpty: true}, (cel, col) => { cel.style = rowsToClaim[i-1].getCell(col).style; });
+
+        row.commit();
+    });
+
+    await outputWB.xlsx.writeFile(`OPERATIONS/Claim Data/output.xlsx`);
+
+    //process.exit(1);
+}
+
+function Broadcast(text2br)
+{
+    try
+    {
+        _socket.emit("broadcast", text2br);
+    }
+    catch (err)
+    {
+        console.log(`Failed Broadcast: ${text2br}`);
+    }
+    return;
+}

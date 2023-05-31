@@ -4,6 +4,11 @@
 
     "SEMSExport": 
     {
-        "names": ["Anna", "Michael", "Kuba"]
+        "names": [ "Thomas", "Zoe", "Thomas", "Zoe", "Simone"]
+    },
+
+    "ClaimsData":
+    {
+        "currentQuarter": "Q3"
     }
 }
