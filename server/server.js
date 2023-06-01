@@ -20,10 +20,10 @@ init();
 
 function init()
 {
-    //server.listen(config.port, config.hostname, () => 
+    server.listen(config.port, config.hostname, () => 
     {
         console.log(`Server is listening for http traffic on http://${config.hostname}:${config.port}/`);
-    }//);
+    });
 
     //create mappings for socket.io
 
@@ -286,6 +286,8 @@ async function ClaimsData()
     const outputWB = new Excel.Workbook();
     outputWB.addWorksheet("Sheet1");
 
+    const outputSheet = outputWB.getWorksheet("Sheet1");
+
     reloadJSON();
 
     var fileListRaw = await fs.readdir("OPERATIONS/Claim Data/"), fileList = [];
@@ -361,11 +363,7 @@ async function ClaimsData()
             rowsToClaim.unshift(row);
     });
 
-
     //Step 1.3: Copy them to new Excel sheet
-    const outputSheet = outputWB.getWorksheet("Sheet1");
-
-    
 
     for(let i = 1; i <= rowsToClaim.length; i++)
     {
@@ -387,6 +385,71 @@ async function ClaimsData()
 
         row.commit();
     });
+
+    //Step 2 is to check for dupes. If dupes are found, we need to remove those rows and merge them, and then re-add the row at the end.
+    //we'll be checking cons
+    //get array of consignments
+    let cons = [];
+    
+    outputSheet.getColumn(1).values.forEach(v => cons.push(v));
+    cons.shift();
+
+    let duplicates = false, dupeRows = {};
+
+    //using sets to quickly check if there are dupes - finding them is a bit harder
+    if(new Set(cons).size !== cons.length)
+        duplicates = true;
+
+    if(duplicates)
+    {//this is gonna be a big one - the goal is to find all dupe pairs
+        //we will accomplish this by first getting an array of dupe cons
+
+        const conSet = new Set(cons);
+
+        let dupeArray = cons.filter((item) =>
+        {
+            if(conSet.has(item))
+            {
+                conSet.delete(item);
+            }
+            else
+                return item;
+        });
+
+        console.log(dupeArray);
+        //then, we will get an array of row numbers that contain these cons
+
+        for(let i = 0; i < cons.length; i++)
+        {
+            //i + 2 is the rownumber
+            dupeArray.forEach((dupe) =>
+            {
+                if(cons[i] == dupe)
+                {
+                    let name = dupe + "";
+                    
+                    if(!dupeRows[name])
+                    {
+                        let arr = [i + 2];
+                        dupeRows[name] = arr;
+                    }
+                    else
+                    {
+                        dupeRows[name].push(i + 2);
+                    }
+                }
+            })
+        }
+
+
+        //OKAY SO CURRENTLY THE PROBLEM IS DUPLICATE DETECTION DOES NOT SUCCESSFULLY REMOVE TRIPLETS AND ETC.
+
+        console.log(dupeRows);
+    }
+    
+
+
+
 
     await outputWB.xlsx.writeFile(`OPERATIONS/Claim Data/output.xlsx`);
 
